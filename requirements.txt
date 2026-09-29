@@ -1,0 +1,8 @@
+# Runtime dependencies (scripts + web app). Versions pinned to the ones this project was tested with.
+numpy==2.4.4
+pandas==3.0.2
+scikit-learn==1.8.0
+matplotlib==3.10.9
+joblib==1.5.3
+streamlit==1.64.0
+altair==6.3.0

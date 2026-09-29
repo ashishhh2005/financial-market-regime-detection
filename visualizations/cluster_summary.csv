@@ -1,0 +1,5 @@
+cluster,rolling_mean_60,rolling_volatility_20,momentum_20,relative_volume_20,days,description
+0,-0.00159,0.0105,-0.03637,1.04528,608,"Calm, falling"
+1,-0.00144,0.02445,-0.07673,1.39937,326,"High volatility, falling"
+2,0.00087,0.02398,0.07049,1.46743,344,"High volatility, rising"
+3,0.00049,0.00678,0.01426,0.95539,1163,"Calm, rising"

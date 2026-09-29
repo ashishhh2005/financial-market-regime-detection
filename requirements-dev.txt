@@ -1,0 +1,3 @@
+# Everything in requirements.txt plus tools for running the notebook.
+-r requirements.txt
+jupyter

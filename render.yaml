@@ -1,0 +1,15 @@
+# Render Blueprint: https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: market-regime-dashboard
+    runtime: python
+    plan: free
+    # Precompute the default results during the build so the first page load is fast.
+    buildCommand: pip install -r requirements.txt && python src/pipeline.py
+    startCommand: streamlit run app.py --server.port $PORT --server.address 0.0.0.0 --server.headless true --browser.gatherUsageStats false --client.toolbarMode viewer
+    healthCheckPath: /_stcore/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.15
+      - key: REPO_URL
+        value: https://github.com/ashishhh2005/financial-market-regime-detection
