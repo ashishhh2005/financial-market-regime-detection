@@ -2,7 +2,7 @@
 
 An end-to-end data science project that identifies market regimes (**Bull, Bear, Stable, Volatile**) in daily market data, first **without labels** (K-Means clustering) and then **with a supervised model** (Random Forest) evaluated on dates it has never seen. Results are published as a web page with a live prediction form and a JSON API (FastAPI).
 
-**Live web page:** https://market-regime-dashboard-cwuq.onrender.com (free hosting: the first visit after a quiet spell can take about a minute to wake up)
+**Live web page:** https://market-regime-detection-51r1.onrender.com (free hosting: the first visit after a quiet spell can take about a minute to wake up)
 
 ![Web page](docs/web-page.png)
 
