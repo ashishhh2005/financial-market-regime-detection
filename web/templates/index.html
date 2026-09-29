@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Market Regime Detection</title>
+  <meta name="description" content="Detecting and predicting Bull, Bear, Stable and Volatile market regimes with K-Means clustering and a Random Forest.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%234f6d9a'/><path d='M5 22l6-7 5 4 6-9 5 5' stroke='white' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="wrap topbar-inner">
+    <a class="brand" href="/">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7"/><path d="M5 22l6-7 5 4 6-9 5 5"/></svg>
+      <span class="brand-text">Market Regime Detection</span>
+    </a>
+    <nav aria-label="Sections">
+      <a href="#timeline">Timeline</a>
+      <a href="#clustering">Clustering</a>
+      <a href="#model">Model</a>
+      <a href="#try">Try it</a>
+      <a href="#about">About</a>
+    </nav>
+    <div class="topbar-links">
+      <a class="btn btn-ghost" href="/docs">API</a>
+      <a class="btn" href="{{ repo_url }}" target="_blank" rel="noopener">GitHub</a>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section class="hero">
+    <div class="wrap">
+      <p class="eyebrow">Data science project · Python · scikit-learn · FastAPI</p>
+      <h1>Can a model tell what kind of market it's in?</h1>
+      <p class="lead">
+        Markets move through phases: steady rises (<span class="chip" style="--c:{{ regimes[0].color }}">Bull</span>),
+        declines (<span class="chip" style="--c:{{ regimes[1].color }}">Bear</span>),
+        quiet periods (<span class="chip" style="--c:{{ regimes[2].color }}">Stable</span>) and
+        turbulence (<span class="chip" style="--c:{{ regimes[3].color }}">Volatile</span>).
+        This project generates a synthetic market with hidden phases, tries to <strong>discover</strong> them
+        without labels using K-Means, then <strong>predicts</strong> them with a Random Forest tested on dates it has never seen.
+      </p>
+      <div class="kpis">
+        {% for k in kpis %}
+        <div class="kpi" title="{{ k.help }}">
+          <div class="kpi-label">{{ k.label }}</div>
+          <div class="kpi-value">{{ k.value }}</div>
+          <div class="kpi-note{% if k.good %} good{% endif %}">{{ k.note }}</div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+
+  <section id="timeline" class="section">
+    <div class="wrap">
+      <h2>The market and its hidden regimes</h2>
+      <p>
+        Top: the price with each day shaded by its true regime. Middle: the same price shaded by the cluster
+        K-Means assigned, without ever seeing the labels. Bottom: 20-day volatility, the clearest single signal.
+        The dashed line marks where the test period starts.
+      </p>
+      <figure class="card chart">
+        <img src="/static/charts/timeline.svg" alt="Price chart of about ten years of synthetic market data, shaded by true regime and by K-Means cluster, with 20-day volatility below" loading="lazy" width="{{ chart.timeline.w }}" height="{{ chart.timeline.h }}">
+      </figure>
+    </div>
+  </section>
+
+  <section id="clustering" class="section alt">
+    <div class="wrap">
+      <h2>What K-Means found without labels</h2>
+      <p>
+        K-Means grouped the days using four slow-moving features. Each cluster is named from its own statistics
+        (volatility level and trend direction), not from the true labels.
+      </p>
+      <div class="card table-wrap">
+        <table>
+          <thead><tr><th>Cluster</th><th class="num">Days</th><th class="num">60-day trend (per day)</th><th class="num">20-day volatility</th><th class="num">20-day momentum</th><th class="num">Relative volume</th></tr></thead>
+          <tbody>
+          {% for c in clusters %}
+            <tr><td><span class="dot" style="--c:{{ c.color }}"></span>{{ c.name }}</td><td class="num">{{ c.days }}</td><td class="num">{{ c.trend }}</td><td class="num">{{ c.vol }}</td><td class="num">{{ c.momentum }}</td><td class="num">{{ c.volume }}</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="grid-2 wide-left">
+        <figure class="card chart">
+          <img src="/static/charts/cluster_heatmap.svg" alt="Heatmap of how many days of each true regime fell into each K-Means cluster" loading="lazy" width="{{ chart.cluster_heatmap.w }}" height="{{ chart.cluster_heatmap.h }}">
+        </figure>
+        <div class="card findings">
+          <div class="big-number">{{ ari }}<span>adjusted Rand index</span></div>
+          <ul>
+            {% for f in cluster_findings %}
+            <li><span class="dot" style="--c:{{ f.color }}"></span><strong>{{ f.regime }}:</strong> {{ f.share }} of its days are in <em>{{ f.cluster }}</em></li>
+            {% endfor %}
+          </ul>
+          <p class="muted">
+            Regimes that share a cluster can't be told apart by K-Means. Bull and Stable usually do: they differ
+            mainly by a tiny drift (about 0.07% vs 0.01% a day) that distance-based clustering barely notices.
+            The supervised model below separates them.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="model" class="section">
+    <div class="wrap">
+      <h2>Random Forest, tested on the future</h2>
+      <p>
+        Trained on <strong>{{ train_range }}</strong> ({{ n_train }} days) and tested on <strong>{{ test_range }}</strong>
+        ({{ n_test }} days). Splitting by date matters: a random shuffle would put nearly identical neighbouring days
+        in both sets and overstate accuracy (97% instead of 93% here).
+      </p>
+      <div class="grid-2">
+        <figure class="card chart"><img src="/static/charts/confusion.svg" alt="Confusion matrix of true versus predicted regimes in the test period" loading="lazy" width="{{ chart.confusion.w }}" height="{{ chart.confusion.h }}"></figure>
+        <figure class="card chart"><img src="/static/charts/importance.svg" alt="Bar chart of feature importance; 20-day volatility matters most" loading="lazy" width="{{ chart.importance.w }}" height="{{ chart.importance.h }}"></figure>
+      </div>
+      <figure class="card chart"><img src="/static/charts/test_strip.svg" alt="True regime and predicted regime for each day of the test period" loading="lazy" width="{{ chart.test_strip.w }}" height="{{ chart.test_strip.h }}"></figure>
+      <p class="muted small">Most mistakes happen in the first weeks after a regime changes, while the rolling windows still contain the previous regime.</p>
+      <div class="grid-2">
+        <div class="card table-wrap">
+          <h3>Scores per regime (test period)</h3>
+          <table>
+            <thead><tr><th>Regime</th><th class="num">Precision</th><th class="num">Recall</th><th class="num">F1</th><th class="num">Days</th></tr></thead>
+            <tbody>
+            {% for r in report %}
+              <tr><td><span class="dot" style="--c:{{ r.color }}"></span>{{ r.regime }}</td><td class="num">{{ r.precision }}</td><td class="num">{{ r.recall }}</td><td class="num">{{ r.f1 }}</td><td class="num">{{ r.days }}</td></tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <div class="card table-wrap">
+          <h3>Cross-validation over five time blocks</h3>
+          <table>
+            <thead><tr><th>Fold</th><th>Starts</th><th class="num">Regimes</th><th class="num">Accuracy</th><th class="num">Macro F1</th></tr></thead>
+            <tbody>
+            {% for f in cv %}
+              <tr><td>{{ f.fold }}</td><td>{{ f.start }}</td><td class="num">{{ f.regimes }}</td><td class="num">{{ f.accuracy }}</td><td class="num">{{ f.f1 }}</td></tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="try" class="section alt">
+    <div class="wrap">
+      <h2>Try the model</h2>
+      <p>Describe a market with the six features and the model classifies it. Start from a typical day of any regime, then move the sliders.</p>
+      <div class="presets" role="group" aria-label="Start from a typical day of">
+        <span class="muted">Start from a typical</span>
+        {% for p in presets %}
+        <a class="pill{% if p == preset and not submitted %} active{% endif %}" href="/?preset={{ p }}#try" data-preset="{{ p }}">{{ p }} day</a>
+        {% endfor %}
+      </div>
+      <div class="try-grid">
+        <form class="card sliders" id="predict-form" method="get" action="/#try">
+          <input type="hidden" name="preset" value="{{ preset }}">
+          {% for s in sliders %}
+          <label class="slider">
+            <span class="slider-top">
+              <span class="slider-label">{{ s.label }}</span>
+              <output id="out-{{ s.name }}">{{ '%.*f'|format(s.digits, s.value) }}</output><span class="unit">{{ s.unit }}</span>
+            </span>
+            <input type="range" name="{{ s.name }}" min="{{ s.min }}" max="{{ s.max }}" step="{{ s.step }}" value="{{ s.value }}"
+                   data-scale="{{ s.scale }}" data-digits="{{ s.digits }}" aria-describedby="help-{{ s.name }}">
+            <span class="slider-help" id="help-{{ s.name }}">{{ s.help }}</span>
+          </label>
+          {% endfor %}
+          <button class="btn predict-btn" type="submit">Predict</button>
+        </form>
+        <div class="card result" id="result" aria-live="polite">
+          <div class="muted">Predicted regime</div>
+          <div class="result-regime" id="result-regime" style="--c:{{ prediction.color }}">{{ prediction.regime }}</div>
+          <div class="muted" id="result-confidence">{{ prediction.confidence }} confidence</div>
+          <div class="bars">
+            {% for b in prediction.bars %}
+            <div class="bar-row">
+              <span class="bar-label">{{ b.regime }}</span>
+              <span class="bar-track"><span class="bar-fill" data-regime="{{ b.regime }}" style="width: {{ b.pct }}%; --c: {{ b.color }}"></span></span>
+              <span class="bar-value" data-regime="{{ b.regime }}">{{ '%.0f'|format(b.pct) }}%</span>
+            </div>
+            {% endfor %}
+          </div>
+          <p class="muted small">Try pushing 20-day volatility above about 2%: the prediction flips to Volatile. Changing only the mean returns moves it between Bull, Stable and Bear.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  {% if robustness %}
+  <section class="section">
+    <div class="wrap">
+      <h2>Does it hold up on other datasets?</h2>
+      <p>
+        The results above use one synthetic market history (seed 42). Rerunning everything on five different histories,
+        cross-validated accuracy ranges from <strong>{{ robust_cv_range }}</strong>. Test accuracy varies more because it
+        depends on which regimes happen to fall in the final 20% of dates.
+      </p>
+      <div class="card table-wrap">
+        <table>
+          <thead><tr><th>Dataset (seed)</th><th class="num">Test accuracy</th><th class="num">Cross-validated</th><th class="num">K-Means ARI</th><th>Regimes never seen in training</th></tr></thead>
+          <tbody>
+          {% for r in robustness %}
+            <tr{% if r.is_default %} class="highlight"{% endif %}><td>{{ r.seed }}{% if r.is_default %} (shown above){% endif %}</td><td class="num">{{ r.test }}</td><td class="num">{{ r.cv }}</td><td class="num">{{ r.ari }}</td><td>{{ r.missing }}</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <p class="muted small">
+        The weakest result comes from a history whose training period contains no Volatile days, so the model has
+        never seen that regime and can't predict it. A model only knows the regimes it has learned from.
+      </p>
+    </div>
+  </section>
+  {% endif %}
+
+  <section id="about" class="section alt">
+    <div class="wrap grid-2 about">
+      <div>
+        <h2>How it works</h2>
+        <ol>
+          <li><strong>Synthetic data.</strong> 2,500 trading days switching between four regimes in blocks of 60–220 days, each with its own return, volatility and volume. 25 volume values are deleted on purpose.</li>
+          <li><strong>Cleaning.</strong> Sort by date, drop duplicates, forward-fill missing volume (never filling from the future).</li>
+          <li><strong>Features.</strong> 20- and 60-day average return and volatility, 20-day momentum and relative volume, all looking only backwards.</li>
+          <li><strong>Clustering.</strong> K-Means on standardised slow-moving features; true labels are used only afterwards to score it.</li>
+          <li><strong>Prediction.</strong> Random Forest trained on the oldest 80% of dates, tested on the newest 20%, plus purged time-series cross-validation.</li>
+        </ol>
+      </div>
+      <div>
+        <h2>Limitations</h2>
+        <ul>
+          <li>The data is synthetic, so regimes switch more cleanly than in real markets.</li>
+          <li>Rolling windows make the model react to a regime change a few weeks late.</li>
+          <li>Real markets have no ground-truth labels, so only the unsupervised part applies directly to real data.</li>
+        </ul>
+        <h2>Use the API</h2>
+        <p>The same model is available as a JSON API. Interactive docs are at <a href="/docs">/docs</a>.</p>
+        <pre><code>POST /api/predict
+{"rolling_mean_20": 0.0006, "rolling_volatility_20": 0.008,
+ "rolling_mean_60": 0.0006, "rolling_volatility_60": 0.0085,
+ "momentum_20": 0.012, "relative_volume_20": 1.02}</code></pre>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="footer">
+  <div class="wrap">
+    <p>Educational portfolio project on synthetic data. <strong>Not investment advice.</strong></p>
+    <p><a href="{{ repo_url }}" target="_blank" rel="noopener">Source code on GitHub</a> · <a href="/docs">API docs</a></p>
+  </div>
+</footer>
+<script src="/static/app.js" defer></script>
+</body>
+</html>

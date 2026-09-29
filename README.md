@@ -1,10 +1,10 @@
 # Financial Market Regime Detection & Prediction
 
-An end-to-end data science project that identifies market regimes (**Bull, Bear, Stable, Volatile**) in daily market data, first **without labels** (K-Means clustering) and then **with a supervised model** (Random Forest) evaluated on dates it has never seen. It includes an interactive dashboard.
+An end-to-end data science project that identifies market regimes (**Bull, Bear, Stable, Volatile**) in daily market data, first **without labels** (K-Means clustering) and then **with a supervised model** (Random Forest) evaluated on dates it has never seen. Results are published as a web page with a live prediction form and a JSON API (FastAPI).
 
-**Live dashboard:** https://market-regime-dashboard-cwuq.onrender.com (free hosting: the first visit after a quiet spell can take about a minute to wake up)
+**Live web page:** https://market-regime-dashboard-cwuq.onrender.com (free hosting: the first visit after a quiet spell can take about a minute to wake up)
 
-![Dashboard](docs/dashboard.png)
+![Web page](docs/web-page.png)
 
 The project uses **synthetic market data** with known hidden regimes, so every method can be checked against the ground truth, and nothing proprietary or personal is shared.
 
@@ -52,13 +52,17 @@ K-Means clustering  →  compared with true regimes (crosstab, adjusted Rand ind
         ↓
 Random Forest  →  time-ordered train/test split + purged time-series cross-validation
         ↓
-Interactive Streamlit dashboard
+Web page + JSON API (FastAPI)
 ```
 
 ## Project structure
 
 ```text
-app.py                      Streamlit dashboard
+web/
+  main.py                   FastAPI app: web page, /api/predict, /api/summary
+  charts.py                 Draws the page's charts as SVG (run at build time)
+  templates/index.html      Page template (server-rendered HTML)
+  static/                   CSS and a small optional script
 render.yaml                 Render deployment config
 src/
   config.py                 Paths, seed, colours
@@ -68,7 +72,7 @@ src/
   clustering.py             K-Means + cluster profiling and scoring
   prediction.py             Random Forest training and evaluation
   evaluation.py             Time split, purged CV, metrics
-  pipeline.py               Runs everything in one call (used by the app and notebook)
+  pipeline.py               Runs everything in one call (used by the web page and notebook)
 notebooks/
   market_regime_analysis.ipynb   Full analysis with charts and outputs
 visualizations/             Charts written by the scripts
@@ -93,10 +97,23 @@ python src/clustering.py         # cluster profiles, comparison with truth, visu
 python src/prediction.py         # time-split evaluation, cross-validation, saves models/regime_classifier.joblib
 ```
 
-Launch the dashboard:
+Launch the web page:
 
 ```bash
-streamlit run app.py
+python src/pipeline.py           # precompute results (optional, makes startup instant)
+python web/charts.py             # draw the charts
+uvicorn web.main:app --reload
+```
+
+Then open http://127.0.0.1:8000 for the page and http://127.0.0.1:8000/docs for the interactive API docs.
+
+Example API call:
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/predict -H "Content-Type: application/json" \
+  -d '{"rolling_mean_20": 0.0006, "rolling_volatility_20": 0.008, "rolling_mean_60": 0.0006,
+       "rolling_volatility_60": 0.0085, "momentum_20": 0.012, "relative_volume_20": 1.02}'
+# {"regime": "Bull", "probabilities": {"Bull": 1.0, "Bear": 0.0, "Stable": 0.0, "Volatile": 0.0}}
 ```
 
 Open the notebook:
@@ -108,11 +125,13 @@ jupyter notebook notebooks/market_regime_analysis.ipynb
 
 ## Deployment
 
-The dashboard runs on [Render](https://render.com) using `render.yaml`:
+The web page runs on [Render](https://render.com) using `render.yaml`:
 
-- **Build:** `pip install -r requirements.txt && python src/pipeline.py` (precomputes the default results so the first page load is fast)
-- **Start:** `streamlit run app.py --server.port $PORT --server.address 0.0.0.0`
+- **Build:** `pip install -r requirements.txt && python src/pipeline.py && python web/charts.py` (precomputes results and charts so pages load fast)
+- **Start:** `uvicorn web.main:app --host 0.0.0.0 --port $PORT`
 - **Python:** 3.11
+
+The page is rendered on the server as plain HTML, so it displays fully even if JavaScript is blocked; JavaScript only makes the prediction form update without a reload.
 
 On Render's free plan the app sleeps after 15 minutes without visitors, so the first visit after that takes about a minute to wake up.
 
@@ -124,7 +143,7 @@ On Render's free plan the app sleeps after 15 minutes without visitors, so the f
 
 ## Tech stack
 
-Python, pandas, NumPy, scikit-learn, Matplotlib, Altair, Streamlit, Joblib, Jupyter, Render
+Python, pandas, NumPy, scikit-learn, Matplotlib, FastAPI, Jinja2, HTML/CSS/JavaScript, Joblib, Jupyter, Render
 
 ## Important note
 

@@ -1,13 +1,13 @@
 """Run the whole workflow in one call: generate -> clean -> features -> cluster -> predict.
 
-Used by the web app, the notebook and the deploy build step, so they all show
+Used by the web page, the notebook and the deploy build step, so they all show
 exactly the same numbers. Running this file precomputes the results for the
-default seed so the web app can load them instantly instead of retraining.
+default seed so the web page can load them instantly instead of retraining.
 """
 import joblib
 
 from clustering import compare_with_truth, describe_clusters, fit_clusters
-from config import MODELS_DIR, RANDOM_STATE
+from config import MODELS_DIR, RANDOM_STATE, REGIMES
 from data_preprocessing import clean
 from feature_engineering import add_features
 from generate_data import generate
@@ -47,9 +47,33 @@ def load_or_run(seed=RANDOM_STATE):
     return run_pipeline(seed)
 
 
+ROBUSTNESS_SEEDS = [1, 7, 42, 123, 2024]
+
+
+def robustness(seeds=ROBUSTNESS_SEEDS):
+    """Rerun the whole pipeline on several synthetic datasets to show the typical range of results."""
+    rows = []
+    for seed in seeds:
+        r = run_pipeline(seed)
+        rows.append({
+            "seed": seed,
+            "test_accuracy": round(float(r["test_metrics"]["accuracy"]), 6),
+            "cv_accuracy": round(float(r["cv"]["accuracy"].mean()), 6),
+            "kmeans_ari": round(float(r["ari"]), 6),
+            "regimes_missing_from_training": sorted(set(REGIMES) - set(r["train"]["true_regime"])),
+        })
+    return rows
+
+
 if __name__ == "__main__":
+    import json
+
     out = run_pipeline()
     MODELS_DIR.mkdir(parents=True, exist_ok=True)
     joblib.dump(out, cache_path(), compress=3)
     print(f"Precomputed seed {out['seed']}: test accuracy {out['test_metrics']['accuracy']:.3f}, "
           f"CV accuracy {out['cv']['accuracy'].mean():.3f}, ARI {out['ari']:.3f} -> {cache_path().name}")
+
+    rows = robustness()
+    (MODELS_DIR / "robustness.json").write_text(json.dumps(rows, indent=2))
+    print("Robustness across seeds:", ", ".join(f"{r['seed']}: {r['test_accuracy']:.3f}" for r in rows))

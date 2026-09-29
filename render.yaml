@@ -1,13 +1,13 @@
 # Render Blueprint: https://render.com/docs/blueprint-spec
 services:
   - type: web
-    name: market-regime-dashboard
+    name: market-regime-detection
     runtime: python
     plan: free
-    # Precompute the default results during the build so the first page load is fast.
-    buildCommand: pip install -r requirements.txt && python src/pipeline.py
-    startCommand: streamlit run app.py --server.port $PORT --server.address 0.0.0.0 --server.headless true --browser.gatherUsageStats false --client.toolbarMode viewer
-    healthCheckPath: /_stcore/health
+    # Precompute results and draw the charts during the build, so the page loads fast.
+    buildCommand: pip install -r requirements.txt && python src/pipeline.py && python web/charts.py
+    startCommand: uvicorn web.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /healthz
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.15

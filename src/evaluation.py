@@ -1,4 +1,4 @@
-"""Evaluation helpers shared by the scripts, the notebook and the web app."""
+"""Evaluation helpers shared by the scripts, the notebook and the web page."""
 import numpy as np
 import pandas as pd
 from sklearn.base import clone
